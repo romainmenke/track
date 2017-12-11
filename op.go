@@ -88,6 +88,12 @@ func (o *op) child(name string) *op {
 	o.children = append(o.children, c)
 
 	c.close = closeFunc(func() {
+		c.Lock()
+		defer c.Unlock()
+		if c.closed == true {
+			return
+		}
+
 		c.duration = time.Since(c.start)
 		c.closed = true
 	})
