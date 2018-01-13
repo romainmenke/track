@@ -48,7 +48,7 @@ func (t *tracker) Handler(name string, next http.Handler) http.Handler {
 		return func(code int, h http.Header) int {
 
 			if o, ok := ctx.Value(opKey).(*op); ok && o != nil {
-				h.Set("Server-Timing", o.encodeServerTime())
+				h.Add("Server-Timing", o.encodeServerTime())
 			}
 			return code
 		}
