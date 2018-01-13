@@ -11,7 +11,7 @@ import (
 func NewTracker() *tracker {
 	return &tracker{
 		quitChan: make(chan struct{}),
-		opChan:   make(chan *op),
+		opChan:   make(chan *op, 100),
 	}
 }
 
@@ -72,7 +72,11 @@ func (t *tracker) Handler(name string, next http.Handler) http.Handler {
 
 			o.duration = time.Since(o.start)
 			o.closed = true
-			t.opChan <- o
+
+			select {
+			case t.opChan <- o:
+			default:
+			}
 		})
 		defer o.Close()
 
@@ -123,7 +127,11 @@ func (t *tracker) RoundTripper(name string, next http.RoundTripper) http.RoundTr
 
 			o.duration = time.Since(o.start)
 			o.closed = true
-			t.opChan <- o
+
+			select {
+			case t.opChan <- o:
+			default:
+			}
 		})
 		defer o.Close()
 
