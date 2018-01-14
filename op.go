@@ -14,9 +14,21 @@ import (
 	"github.com/pborman/uuid"
 )
 
+type Logger interface {
+	Print(...interface{})
+}
+
+type defaultLogger struct{}
+
+func (l *defaultLogger) Print(v ...interface{}) {
+	fmt.Print(v...)
+}
+
 type opKeyType string
 
-const opKey = opKeyType("mr-shopify-meta/op")
+const opKey = opKeyType("track/op")
+
+var DefaultLogger Logger = &defaultLogger{}
 
 func New(name string, ctx context.Context) (Op, context.Context) {
 	if o, ok := ctx.Value(opKey).(*op); ok && o != nil {
@@ -53,27 +65,25 @@ type Op interface {
 type op struct {
 	sync.Mutex
 
-	children      []*op
-	close         closeFunc
-	closed        bool
-	duration      time.Duration
-	err           string
-	meta          map[string]string
-	name          string
-	request       map[string]string
-	requestHeader map[string]string
-	start         time.Time
-	trackID       string
+	children []*op
+	close    closeFunc
+	closed   bool
+	duration time.Duration
+	err      string
+	meta     map[string]string
+	name     string
+	request  map[string]string
+	start    time.Time
+	trackID  string
 }
 
 func newOp(name string, trackID string) *op {
 	o := &op{
-		meta:          make(map[string]string),
-		name:          name,
-		request:       make(map[string]string),
-		requestHeader: make(map[string]string),
-		start:         time.Now(),
-		trackID:       trackID,
+		meta:    make(map[string]string),
+		name:    name,
+		request: make(map[string]string),
+		start:   time.Now(),
+		trackID: trackID,
 	}
 
 	return o
@@ -108,14 +118,19 @@ func (f closeFunc) Close() {
 }
 
 func (o *op) encodeServerTime() string {
-	return strings.Join(o.collectServerTime(), ", ")
+	return strings.Join(o.collectServerTime(nil), ", ")
 }
 
-func (o *op) collectServerTime() []string {
+func (o *op) collectServerTime(buf []string) []string {
 	o.Lock()
 	defer o.Unlock()
 
-	out := make([]string, 0, len(o.children)+2)
+	var out []string
+	if buf == nil {
+		out = make([]string, 0, len(o.children)+2)
+	} else {
+		out = buf
+	}
 
 	if o.closed {
 		out = append(out, fmt.Sprintf("%s=%f; \"%s\"", o.name, o.duration.Seconds()*1000, o.name))
@@ -124,24 +139,20 @@ func (o *op) collectServerTime() []string {
 	}
 
 	for _, c := range o.children {
-		out = append(out, c.collectServerTime()...)
+		out = c.collectServerTime(out)
 	}
 
 	return out
 }
 
 func (o *op) print() {
-	o.printOp()
-}
-
-func (o *op) printOp() {
 	o.Lock()
 	defer o.Unlock()
 
 	buf := bytes.NewBuffer(nil)
 	e := logfmt.NewEncoder(buf)
 	defer func() {
-		fmt.Print(string(buf.Bytes()))
+		DefaultLogger.Print(string(buf.Bytes()))
 	}()
 
 	err := e.EncodeKeyval("op", o.name)
@@ -151,15 +162,6 @@ func (o *op) printOp() {
 
 	if len(o.request) > 0 {
 		for k, v := range o.request {
-			err = e.EncodeKeyval(k, v)
-			if err != nil {
-				panic(err)
-			}
-		}
-	}
-
-	if len(o.requestHeader) > 0 {
-		for k, v := range o.requestHeader {
 			err = e.EncodeKeyval(k, v)
 			if err != nil {
 				panic(err)
@@ -202,7 +204,7 @@ func (o *op) printOp() {
 	}
 
 	for _, c := range o.children {
-		c.printOp()
+		c.print()
 	}
 }
 
@@ -211,6 +213,9 @@ func (o *op) Close() {
 }
 
 func (o *op) Err(err error) error {
+	o.Lock()
+	defer o.Unlock()
+
 	o.err = err.Error()
 	return err
 }
@@ -220,6 +225,9 @@ func (o *op) ErrS(err string) error {
 }
 
 func (o *op) Meta(key string, value string) {
+	o.Lock()
+	defer o.Unlock()
+
 	o.meta[key] = value
 }
 
@@ -228,6 +236,9 @@ func (o *op) Name() string {
 }
 
 func (o *op) req(r *http.Request) {
+	o.Lock()
+	defer o.Unlock()
+
 	o.request["method"] = r.Method
 
 	if r.URL != nil {

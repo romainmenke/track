@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"math/rand"
 	"net/http"
 	"time"
@@ -16,26 +17,51 @@ func main() {
 	time.Sleep(time.Millisecond * 5)
 
 	http.HandleFunc("/", tracker.Handler("main", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		track1, ctx := track.New("abc", r.Context())
-		defer track1.Close()
 
-		time.Sleep(time.Millisecond * time.Duration(rand.Intn(5)))
-		track1.Close()
-
-		track2, _ := track.New("xyz", ctx)
-		defer track2.Close()
-
-		time.Sleep(time.Millisecond * time.Duration(rand.Intn(5)))
-
-		track2b, _ := track.New("rst", ctx)
-		defer track2b.Close()
-		time.Sleep(time.Millisecond * time.Duration(rand.Intn(5)))
-		track2b.Close()
+		// track sub things
+		trackOneThing(r)
+		trackTwoThings(r)
 
 		w.Write([]byte("OK"))
 
 	})).ServeHTTP)
 
-	panic(http.ListenAndServe(":8000", nil))
+	log.Println(http.ListenAndServe(":8000", nil))
 
+}
+
+func trackOneThing(r *http.Request) {
+	track, _ := track.New("trackOneThing", r.Context())
+	defer track.Close()
+
+	time.Sleep(time.Millisecond * time.Duration(rand.Intn(5)+1))
+
+	track.Close()
+}
+
+func trackTwoThings(r *http.Request) {
+	ctx := r.Context()
+
+	trackA, ctx := track.New("trackTwoThings", ctx)
+	defer trackA.Close()
+
+	{
+		trackA1, _ := track.New("trackTwoThings1", ctx)
+		defer trackA1.Close()
+
+		time.Sleep(time.Millisecond * time.Duration(rand.Intn(10)+5))
+
+		trackA1.Close()
+	}
+
+	{
+		trackA2, _ := track.New("trackTwoThings2", ctx)
+		defer trackA2.Close()
+
+		time.Sleep(time.Millisecond * time.Duration(rand.Intn(10)+5))
+
+		trackA2.Close()
+	}
+
+	trackA.Close()
 }
