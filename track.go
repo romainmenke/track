@@ -3,6 +3,7 @@ package track
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/pborman/uuid"
@@ -60,7 +61,16 @@ func (t *tracker) Handler(name string, next http.Handler) http.Handler {
 			requestID = uuid.New()
 		}
 
+		xRequestStart := r.Header.Get("X-Request-Start")
+
 		o := newOp(name, requestID)
+
+		if i, err := strconv.ParseInt(xRequestStart, 0, 64); err == nil && i != 0 {
+			c := o.child("dyno")
+			o.start = time.Unix(0, i*1000000)
+			c.start = time.Unix(0, i*1000000)
+			c.Close()
+		}
 
 		o.close = closeFunc(func() {
 			o.Lock()
