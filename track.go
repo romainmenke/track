@@ -2,6 +2,7 @@ package track
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -56,6 +57,9 @@ func (t *tracker) Handler(name string, next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Trailer", "Server-Timing")
+		start := time.Now()
+
 		requestID := r.Header.Get("X-Request-ID")
 		if requestID == "" {
 			requestID = uuid.New()
@@ -113,6 +117,8 @@ func (t *tracker) Handler(name string, next http.Handler) http.Handler {
 		}
 
 		next.ServeHTTP(w, r.WithContext(ctx))
+
+		w.Header().Set("Server-Timing", fmt.Sprintf("total;dur=%f", time.Since(start).Seconds()*1000))
 	})
 }
 
