@@ -133,9 +133,9 @@ func (o *op) collectServerTime(buf []string) []string {
 	}
 
 	if o.closed {
-		out = append(out, fmt.Sprintf("%s=%f; \"%s\"", o.name, o.duration.Seconds()*1000, o.name))
+		out = append(out, fmt.Sprintf("%s;dur=%f;desc=\"%s\";", o.name, o.duration.Seconds()*1000, o.name))
 	} else {
-		out = append(out, fmt.Sprintf("%s=%f; \"%s\"", o.name, time.Since(o.start).Seconds()*1000, o.name))
+		out = append(out, fmt.Sprintf("%s;dur=%f;desc=\"%s\";", o.name, time.Since(o.start).Seconds()*1000, o.name))
 	}
 
 	for _, c := range o.children {
